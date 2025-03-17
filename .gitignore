@@ -1,0 +1,5 @@
+wandb/
+runs
+checkpoint
+__pycache__/
+doc/

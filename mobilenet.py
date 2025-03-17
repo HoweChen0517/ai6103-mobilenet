@@ -42,7 +42,7 @@ class MobileNet(nn.Module):
     # (128,2) means conv planes=128, conv stride=2, by default conv stride=1
     cfg = [64, (128,2), 128, (256,2), 256, (512,2), 512, 512, 512, 512, 512, (1024,2), 1024]
 
-    def __init__(self, num_classes=10, sigmoid_block_ind=[4,5,6,7,8,9,10]):
+    def __init__(self, num_classes=100, sigmoid_block_ind=[4,5,6,7,8,9,10]):
         super(MobileNet, self).__init__()
         # replace relu by sigmoid
         self.sigmoid_block_ind = sigmoid_block_ind

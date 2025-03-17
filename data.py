@@ -29,7 +29,7 @@ def get_train_valid_loader(data_dir,
             transforms.ToTensor(),
             normalize,
     ])
-    if augment:
+    if augment: # random cropping and random horizontal flip
         train_transform = transforms.Compose([
             transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),

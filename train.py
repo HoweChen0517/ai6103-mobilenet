@@ -88,7 +88,7 @@ def eval_training(epoch=0, tb=True):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-gpu', action='store_true', default=False, help='use gpu or not')
-    parser.add_argument('-b', type=int, default=128, help='batch size for dataloader')
+    parser.add_argument('-b', type=int, default=1024, help='batch size for dataloader')
     parser.add_argument('-lr', type=float, default=0.1, help='initial learning rate')
     args = parser.parse_args()
 
@@ -97,7 +97,8 @@ if __name__ == '__main__':
     optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
 
     cifar100_train_loader, cifar100_validation_loader = get_train_valid_loader(
-        data_dir=os.path.join('data', 'cifar100'),
+        data_dir=config.DATA_DIR,
+        augment=True,
         batch_size=args.b,
         random_seed=42,
         valid_size=0.2,
@@ -107,14 +108,14 @@ if __name__ == '__main__':
         pin_memory=True
     )
     cifar100_test_loader = get_test_loader(
-        data_dir=os.path.join('data', 'cifar100'),
+        data_dir=config.DATA_DIR,
         batch_size=args.b,
         num_workers=4,
         pin_memory=True
     )
 
     writer = SummaryWriter(log_dir=os.path.join(
-            config.LOG_DIR, args.net, config.TIME_NOW))
+            config.LOG_DIR, f'MobileNet', config.TIME_NOW))
     
     checkpoint_path = os.path.join(
         config.CHECKPOINT_PATH, config.TIME_NOW)
