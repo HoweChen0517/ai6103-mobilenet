@@ -90,7 +90,7 @@ def eval_training(epoch):
     print('Evaluating Network.....')
     print('Test set: Epoch: {}, Average loss: {:.4f}, Accuracy: {:.4f}, Time consumed:{:.2f}s'.format(
         epoch,
-        test_loss / len(cifar100_validation_loader.dataset),
+        test_loss / len(cifar100_validation_loader),
         correct.float() / len(cifar100_validation_loader.dataset),
         finish - start
     ))
@@ -104,7 +104,7 @@ def eval_training(epoch):
     
     # add informations to wandb
     wandb.log({
-        'Val/Average loss': test_loss / len(cifar100_validation_loader.dataset),
+        'Val/Average loss': test_loss / len(cifar100_validation_loader),
         'Val/Accuracy': correct.float() / len(cifar100_validation_loader.dataset),
         # 'Val/weight_grad_norm': grad_norm,
         'global_step': global_step,
