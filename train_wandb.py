@@ -17,6 +17,7 @@ import config
 def train(epoch):
     start = time.time()
     model.train()
+    correct = 0.0
     for batch_index, (images, labels) in enumerate(cifar100_train_loader):
 
         if args.gpu:
@@ -28,11 +29,15 @@ def train(epoch):
         loss = loss_function(outputs, labels)
         loss.backward()
         optimizer.step()
+        
+        _, preds = outputs.max(1)
+        correct += preds.eq(labels).sum()
 
         global_step = (epoch - 1) * len(cifar100_train_loader) + batch_index + 1
         
-        # 计算权重的L2范数
-        weight_norm = torch.norm(model.layers[8].conv1.weight, p=2)
+        # 计算权重梯度的L2范数
+        # weight_norm = torch.norm(model.layers[8].conv1.weight, p=2)
+        grad_norm = torch.norm(model.layers[8].conv1.weight.grad, p=2)
         
         print('Training Epoch: {epoch} [{trained_samples}/{total_samples}]\tLoss: {:0.4f}\tLR: {:0.6f}'.format(
             loss.item(),
@@ -44,12 +49,17 @@ def train(epoch):
 
         # update training loss for each iteration
         wandb.log({'Train/loss': loss.item(), 'global_step': global_step, 'epoch': epoch})
-        wandb.log({'Train/weight_norm': weight_norm, 'global_step': global_step, 'epoch': epoch})
+        if args.record_grad == 'True':
+            wandb.log({'Train/weight_grad_norm': grad_norm, 'global_step': global_step, 'epoch': epoch})
         writer.add_scalar('Train/loss', loss.item(), global_step)
+
+    accuracy = correct.float() / len(cifar100_train_loader.dataset)
+    
+    wandb.log({'Train/Accuracy': accuracy, 'global_step': global_step, 'epoch': epoch})
 
     finish = time.time()
     
-    print('epoch {} training time consumed: {:.2f}s'.format(epoch, finish - start))
+    print('epoch {} training time consumed: {:.2f}s, epoch accuracy: {:.4f}'.format(epoch, finish - start, accuracy))
     
 @torch.no_grad()
 def eval_training(epoch):
@@ -89,16 +99,21 @@ def eval_training(epoch):
     global_step = epoch * len(cifar100_train_loader)
     
     # 计算L2范数——在验证阶段理论上不变
-    weight_norm = torch.norm(model.layers[8].conv1.weight, p=2)
+    # weight_norm = torch.norm(model.layers[8].conv1.weight, p=2)
+    grad_norm = torch.norm(model.layers[8].conv1.weight.grad, p=2)
     
     # add informations to wandb
     wandb.log({
         'Val/Average loss': test_loss / len(cifar100_validation_loader.dataset),
         'Val/Accuracy': correct.float() / len(cifar100_validation_loader.dataset),
-        'Val/weight_norm': weight_norm,
+        # 'Val/weight_grad_norm': grad_norm,
         'global_step': global_step,
         'epoch': epoch
     })
+    
+    if args.record_grad == 'True':
+        wandb.log({'Val/weight_grad_norm': grad_norm, 'global_step': global_step, 'epoch': epoch})
+        
     writer.add_scalar('Val/Average loss', test_loss / len(cifar100_validation_loader.dataset), epoch)
     writer.add_scalar('Val/Accuracy', correct.float() / len(cifar100_validation_loader.dataset), epoch)
 
@@ -125,6 +140,7 @@ def test(model_path):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('-epoch', type=int, default=15, help='epoch number')
     parser.add_argument('-gpu', action='store_true', default=True, help='use gpu or not')
     parser.add_argument('-b', type=int, default=128, help='batch size for dataloader')
     parser.add_argument('-lr', type=float, default=0.01, help='initial learning rate')
@@ -132,16 +148,17 @@ if __name__ == '__main__':
     parser.add_argument('-weight_decay', type=float, default=5e-4, help='weight decay')
     parser.add_argument('-scheduler', type=str, default='False', help='use scheduler or not')
     parser.add_argument('-sigma_block_ind', type=str, default='all relu', help='index of sigmoid block')
+    parser.add_argument('-record_grad', type=str, default='False', help='record gradient or not')
     args = parser.parse_args()
 
     # 定义记录器
     wandb.init(project="ai6103-mobilenet",
-               name=f'mobilenet_Task Activation Function_{args.sigma_block_ind}_{config.TIME_NOW}',
+               name=f'mobilenet_Task Activation_Function_{args.sigma_block_ind}_{config.TIME_NOW}',
                config={
                     "device": "GPU" if args.gpu else "CPU",
                     "learning_rate": args.lr,
                     "batch_size": args.b,
-                    "epochs": config.EPOCH,
+                    "epochs": args.epoch,
                     "use_weight_decay": args.use_weight_decay,
                     "weight_decay": args.weight_decay,
                     "scheduler": args.scheduler,
@@ -169,7 +186,7 @@ if __name__ == '__main__':
     if args.scheduler == 'True':
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
-            T_max=config.EPOCH,  # 总周期数
+            T_max=args.epoch,  # 总周期数
             eta_min=0  # 最小学习率
         )
         
@@ -206,7 +223,7 @@ if __name__ == '__main__':
     # 训练
     best_acc = 0.0
 
-    for epoch in range(1, config.EPOCH + 1):
+    for epoch in range(1, args.epoch + 1):
 
         train(epoch)
         acc = eval_training(epoch)
@@ -219,7 +236,7 @@ if __name__ == '__main__':
                 'epoch': epoch
             })
 
-        if config.EPOCH >= 200:
+        if args.epoch >= 200:
             if epoch > config.MILESTONES[1] and best_acc < acc:
                 weights_path = checkpoint_path + '/best.pth'
                 print('saving weights file to {}'.format(weights_path))
@@ -232,7 +249,7 @@ if __name__ == '__main__':
                 print('saving weights file to {}'.format(weights_path))
                 torch.save(model.state_dict(), weights_path)
         else:
-            if epoch == config.EPOCH:
+            if epoch == args.epoch:
                 weights_path = checkpoint_path + '/epoch' + str(epoch) + '.pth'
                 print('saving weights file to {}'.format(weights_path))
                 torch.save(model.state_dict(), weights_path)
